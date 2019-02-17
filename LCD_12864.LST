@@ -1,0 +1,249 @@
+C51 COMPILER V9.00   LCD_12864                                                             08/19/2016 14:29:52 PAGE 1   
+
+
+C51 COMPILER V9.00, COMPILATION OF MODULE LCD_12864
+OBJECT MODULE PLACED IN LCD_12864.OBJ
+COMPILER INVOKED BY: D:\Keil\C51\BIN\C51.EXE LCD_12864.c COMPACT BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          #include "LCD_12864.h"
+   2          
+   3          BYTE lcd_x,lcd_y;
+   4          static BOOL num = 0;
+   5          sbit LCD_DATA_COMMAND_SELECTION = P0^7; //液晶数据/命令选择端(1/0)
+   6          sbit LCD_READ_WRITE_SELECTION=P0^6;     //读/写选择端(1/0)
+   7          sbit LCD_DATA_ENABLE=P0^5;              //数据使能端
+   8          sbit LCD_PARALLEL_SERIE_SELECTION=P0^4; //并/串选择：H并行 L串行
+   9          sbit LCD_RESET=P0^3;                    //复位 ????? P0^2
+  10                   
+  11          /******************************************
+  12          名称：CheckBusy
+  13          功能：判断LCD数据传输引脚是否处在忙状态
+  14          ******************************************/
+  15          void CheckBusy()
+  16          {
+  17   1              LCD_DATA_COMMAND_SELECTION = 0;
+  18   1              LCD_READ_WRITE_SELECTION = 1;
+  19   1              LCD_DATA_ENABLE = 1;
+  20   1              LCD_PORT = 0xff;
+  21   1              while(LCD_PORT & 0x80);
+  22   1              LCD_DATA_ENABLE = 0;    
+  23   1      }
+  24          
+  25          /******************************************
+  26          名称：WriteCommand
+  27          功能：向LCD写入命令
+  28          ******************************************/
+  29          void WriteCommand(BYTE dat)
+  30          {
+  31   1              CheckBusy();
+  32   1              LCD_DATA_COMMAND_SELECTION = 0;
+  33   1              LCD_READ_WRITE_SELECTION = 0;
+  34   1              LCD_PORT = dat;
+  35   1              LCD_DATA_ENABLE = 1;
+  36   1              Delay10us(1);
+  37   1              //Delayms(1);
+  38   1              LCD_DATA_ENABLE = 0;
+  39   1      }
+  40          
+  41          /******************************************
+  42          名称：WriteData
+  43          功能：向LCD写入数据
+  44          ******************************************/
+  45          void WriteData(BYTE dat) 
+  46          {
+  47   1              CheckBusy();
+  48   1              LCD_DATA_COMMAND_SELECTION = 1;
+  49   1              LCD_READ_WRITE_SELECTION = 0;
+  50   1              LCD_PORT = dat;
+  51   1              LCD_DATA_ENABLE = 1;
+  52   1              Delay10us(1);
+  53   1              //Delayms(1);
+  54   1              LCD_DATA_ENABLE = 0;
+  55   1      }
+C51 COMPILER V9.00   LCD_12864                                                             08/19/2016 14:29:52 PAGE 2   
+
+  56          
+  57          
+  58          /******************************************
+  59          名称：Lcd12864Init
+  60          功能：对LCD执行初始化命令
+  61          ******************************************/
+  62          void Lcd12864Init()
+  63          {
+  64   1              LCD_PARALLEL_SERIE_SELECTION = 1;
+  65   1              WriteCommand(0x30); //回到基本指令集
+  66   1              Delayms(1);
+  67   1              WriteCommand(0x01); //清屏
+  68   1              Delayms(1);
+  69   1              WriteCommand(0x06);//光标右移整体显示不移动
+  70   1              Delayms(1);
+  71   1              WriteCommand(0x0c); //退出睡眠模式
+  72   1      }
+  73          
+  74          /******************************************
+  75          名称：Lcd12864Play
+  76          功能：播放一组点阵
+  77          ******************************************/
+  78          void Lcd12864Play(LPBYTE p)
+  79          {
+  80   1              BYTE j,k;
+  81   1              lcd_x = 0x80;
+  82   1              lcd_y = 0x80;
+  83   1              if(!num) {
+  84   2                      for(j = 0;j < 32;j++)
+  85   2                      {
+  86   3                              WriteCommand(lcd_y + j);//水平地址可以自动加1，而垂直地址不会
+  87   3                              WriteCommand(lcd_x);//上半屏也就是上面32个垂直坐标对应的水平坐标为0x80-0x87
+  88   3                              for(k = 0;k < 16;k++)//水平地址和垂直地址确定2个字节的数据点亮几个点
+  89   3                              {
+  90   4                                      WriteData(*p++);//一次传一个字节，也就是8个点
+  91   4                              }                       
+  92   3                      }
+  93   2                      num = 1;                
+  94   2              }
+  95   1              else {
+  96   2                      lcd_x = 0x88;//下半屏也就是下面32个垂直坐标对应的水平坐标为0x88-0x8f
+  97   2                      for(j = 0;j < 32;j++)
+  98   2                      {
+  99   3                              WriteCommand(lcd_y + j);//水平地址可以自动加1，而垂直地址不会
+ 100   3                              WriteCommand(lcd_x);//上半屏也就是上面32个垂直坐标对应的水平坐标为0x80-0x87
+ 101   3                              for(k = 0;k < 16;k++)//水平地址和垂直地址确定2个字节的数据点亮几个点
+ 102   3                              {
+ 103   4                                      WriteData(*p++);//一次传一个字节，也就是8个点
+ 104   4                              }                       
+ 105   3                      }
+ 106   2                      num = 0;
+ 107   2              }
+ 108   1      }
+ 109          
+ 110          //图片显示函数
+ 111          /******************************************
+ 112          名称：Lcd12864DisplayImage
+ 113          功能：在坐标(x,y)处显示字符串，y取值只能为1\2\3\4
+ 114          ******************************************/
+ 115          void Lcd12864DisplayImage(LPBYTE p1,LPBYTE p2)
+ 116          {
+ 117   1              BYTE j,k;
+C51 COMPILER V9.00   LCD_12864                                                             08/19/2016 14:29:52 PAGE 3   
+
+ 118   1              lcd_x = 0x80;
+ 119   1              lcd_y = 0x80;
+ 120   1              Lcd12864Init();
+ 121   1              WriteCommand(0x34);//打开扩展功能模式，绘图显示关闭
+ 122   1                      for(j = 0;j < 32;j++)
+ 123   1                      {
+ 124   2                              WriteCommand(lcd_y + j);//水平地址可以自动加1，而垂直地址不会
+ 125   2                              WriteCommand(lcd_x);//上半屏也就是上面32个垂直坐标对应的水平坐标为0x80-0x87
+ 126   2                              for(k = 0;k < 16;k++)//水平地址和垂直地址确定2个字节的数据点亮几个点
+ 127   2                              {
+ 128   3                                      WriteData(*p1++);//一次传一个字节，也就是8个点
+ 129   3                              }                       
+ 130   2                      }
+ 131   1                      lcd_x = 0x88;//下半屏也就是下面32个垂直坐标对应的水平坐标为0x88-0x8f
+ 132   1                      for(j = 0;j < 32;j++)
+ 133   1                      {
+ 134   2                              WriteCommand(lcd_y + j);//水平地址可以自动加1，而垂直地址不会
+ 135   2                              WriteCommand(lcd_x);//上半屏也就是上面32个垂直坐标对应的水平坐标为0x80-0x87
+ 136   2                              for(k = 0;k < 16;k++)//水平地址和垂直地址确定2个字节的数据点亮几个点
+ 137   2                              {
+ 138   3                                      WriteData(*p2++);//一次传一个字节，也就是8个点
+ 139   3                              }                       
+ 140   2                      }
+ 141   1              WriteCommand(0x36);//打开扩展功能模式，打开绘图显示
+ 142   1      }
+ 143          //绘图显示RAM提供128X8个字节的记忆空间，在更改绘图RAM时先连续写入水平与垂直的坐标值，
+ 144          //再写入两个字节的数据到绘图RAM，而地址计数器会自动加1，再写入绘图RAM的期间，绘图显示必须关闭
+ 145          //步骤如下
+ 146          //1.关闭绘图显示功能。
+ 147          //2.先将水平的位元组坐标（X）写入绘图RAM地址，再将垂直的坐标（Y）写入绘图RAM地址
+ 148          //3.打开绘图显示功能
+ 149          
+ 150          /******************************************
+ 151          名称：Lcd12864Printf
+ 152          功能：在坐标(x,y)处显示字符串，y取值只能为1\2\3\4
+ 153          ******************************************/
+ 154          void Lcd12864Printf(BYTE x,BYTE y,LPBYTE p)
+ 155          {
+ 156   1              BYTE string_address;
+ 157   1              WriteCommand(0x30);
+ 158   1              switch(y){
+ 159   2                      case 1 : string_address = 0x80+x;break;
+ 160   2                      case 2 : string_address = 0x90+x;break;
+ 161   2                      case 3 : string_address = 0x88+x;break;
+ 162   2                      case 4 : string_address = 0x98+x;break;
+ 163   2                      default : break;
+ 164   2              }
+ 165   1              WriteCommand(string_address);
+ 166   1              while(*p!='\0')
+ 167   1              {
+ 168   2                      WriteData(*p++);
+ 169   2              }
+ 170   1      }
+ 171          
+ 172          /******************************************
+ 173          名称：Lcd12864PrintfOne
+ 174          功能：字符串第一行显示,停留1秒后清空
+ 175          ******************************************/
+ 176          void Lcd12864PrintfOne(LPBYTE p)
+ 177          {
+ 178   1              Lcd12864Printf(0,1,p);
+ 179   1              Delay1s(1);
+C51 COMPILER V9.00   LCD_12864                                                             08/19/2016 14:29:52 PAGE 4   
+
+ 180   1              Lcd12864ClearDDRAM();
+ 181   1      }
+ 182          
+ 183          
+ 184          /******************************************
+ 185          名称：Lcd12864ClearDDRAM
+ 186          功能：清空DDRAM
+ 187          ******************************************/
+ 188          void Lcd12864ClearDDRAM()
+ 189          {
+ 190   1              WriteCommand(0x01);     
+ 191   1      }
+ 192          
+ 193          
+ 194          /******************************************
+ 195          名称：Lcd12864ClearGDRAM
+ 196          功能：清空GDRAM
+ 197          ******************************************/
+ 198          void Lcd12864ClearGDRAM()
+ 199          {
+ 200   1              BYTE i,j,k;
+ 201   1              WriteCommand(0x34);
+ 202   1              i = 0x80;
+ 203   1              for(j = 0;j < 32;j++){
+ 204   2                      WriteCommand(i++);
+ 205   2                      WriteCommand(0x80);
+ 206   2                      for(k = 0;k < 16;k++){
+ 207   3                              WriteData(0x00);        
+ 208   3                      }       
+ 209   2              }
+ 210   1              i = 0x80;
+ 211   1              for(j = 0;j < 32;j++){
+ 212   2                      WriteCommand(i++);
+ 213   2                      WriteCommand(0x88);
+ 214   2                      for(k = 0;k < 16;k++){
+ 215   3                              WriteData(0x00);        
+ 216   3                      }       
+ 217   2              }
+ 218   1              WriteCommand(0x36);//打开扩展功能模式，打开绘图显示
+ 219   1      }
+ 220          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    613    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =      2      22
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      1    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

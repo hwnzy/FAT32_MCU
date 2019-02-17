@@ -1,0 +1,7 @@
+"DELAY.obj",
+"FAT.obj",
+"LCD_12864.obj",
+"SD.obj",
+"MAIN.obj" 
+TO "FAT_DEBUG" 
+RAMSIZE(256) 
